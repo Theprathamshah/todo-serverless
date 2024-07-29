@@ -1,0 +1,270 @@
+
+
+# service: server
+
+# frameworkVersion: "3"
+
+
+# plugins:
+#   - serverless-offline
+
+# provider:
+#   name: aws
+#   runtime: nodejs18.x
+#   region: 'ap-south-1'
+#   stage: ${opt:stage, 'dev'}
+#   environment:
+#     TODOS_TABLE: ${self:custom.todosTable.${self:provider.stage}}
+#   deploymentBucket:
+#     name: iac-barebone-jap
+#   iam:
+#     role:
+#       statements:
+#         - Effect: Allow
+#           Action: 
+#             - "dynamodb:PutItem"
+#             - "dynamodb:GetItem"
+#             - "dynamodb:Scan"     
+#             - "dynamodb:DeleteItem"
+#             - "dynamodb:UpdateItem"
+#           Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.todosTable.${self:provider.stage}}
+
+# package: 
+#   individually: true
+# functions:
+#   createTodo: 
+#     handler: lambdas/createTodo.createTodo
+#     environment:
+#       TODOS_TABLE: ${self:custom.todosTable.${self:provider.stage}}
+#     events:
+#       - http:
+#           path: /todos
+#           method: post
+#   getTodos:
+#     handler: lambdas/getTodo.getTodo
+#     environment:
+#       TODOS_TABLE: ${self:custom.todosTable.${self:provider.stage}}
+#     events:
+#       - http:
+#           path: todos
+#           method: get
+#   updateTodo:
+#     handler: dist/lambdas/updateTodo.updateTodo
+#     environment:
+#       TODOS_TABLE: ${self:custom.todosTable.${self:provider.stage}}
+#     events:
+#       - http:
+#           path: todos/{id}
+#           method: put
+
+#   deleteTodo:
+#     handler: dist/lambdas/deleteTodo.deleteTodo
+#     environment:
+#       TODOS_TABLE: ${self:custom.todosTable.${self:provider.stage}}
+#     events:
+#       - http:
+#           path: todos/{id}
+#           method: delete
+
+
+
+# custom:
+#   todosTable:
+#     dev: TodoTable-dev
+#     prod: TodoTable-prod
+#     test: TodoTable-test
+
+#   resources:
+#     Resources:
+#       TodoTableDev:
+#         Type: AWS::DynamoDB::Table
+#         Condition: IsDev
+#         Properties:
+#           TableName: TodoTable-dev
+#           AttributeDefinitions:
+#             - AttributeName: id
+#               AttributeType: S
+#           KeySchema:
+#             - AttributeName: id
+#               KeyType: HASH
+#           ProvisionedThroughput:
+#             ReadCapacityUnits: 1
+#             WriteCapacityUnits: 1
+#       TodoTableProd:
+#         Type: AWS::DynamoDB::Table
+#         Condition: IsProd
+#         Properties:
+#           TableName: TodoTable-prod
+#           AttributeDefinitions:
+#             - AttributeName: id
+#               AttributeType: S
+#           KeySchema:
+#             - AttributeName: id
+#               KeyType: HASH
+#           ProvisionedThroughput:
+#             ReadCapacityUnits: 1
+#             WriteCapacityUnits: 1
+
+# Conditions:
+#     IsDev:
+#       Fn::Equals:
+#         - ${self:provider.stage}
+#         - dev
+#     IsProd:
+#       Fn::Equals:
+#         - ${self:provider.stage}
+#         - prod
+
+service: todo
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: ap-south-1
+  deploymentBucket:
+    name: serverless-deployment-bucket-backend
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "dynamodb:PutItem"
+            - "dynamodb:GetItem"
+            - "dynamodb:Scan"
+            - "dynamodb:DeleteItem"
+            - "dynamodb:UpdateItem"
+            - "dynamodb:BatchWriteItem"
+          Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/TodosTable-${self:provider.stage}"
+
+plugins:
+  - serverless-offline
+functions:
+  createTodo:
+    handler: dist/lambdas/createTodo.createTodo
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          method: post
+          path: todos
+          cors: true
+
+
+  removeCompletedTodo:
+    handler: dist/lambdas/removeCompletedTodo.removeCompletedTodo
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - schedule:
+          method: scheduler
+          rate: cron(0 0 * * *)
+          enabled: true
+          timezone: 'Asia/Kolkata'
+
+
+  updateTodo:
+    handler: dist/lambdas/updateTodo.updateTodo
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          method: put
+          path: todos/{id}
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: false
+
+
+  deleteTodo:
+    handler: dist/lambdas/deleteTodo.deleteTodo
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          method: delete
+          path: todos/{id}
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: false
+
+
+  getAllTodos:
+    handler: dist/lambdas/getAllTodos.getAllTodos
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          method: get
+          path: todos
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: false
+
+  getTodo:
+    handler: dist/lambdas/getTodo.getTodo
+    environment:
+      TableName: TodosTable-${self:provider.stage}
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+      STAGE: ${self:provider.stage}
+    events:
+      - http:
+          method: get
+          path: todos/{id}
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+            allowCredentials: false
+
+
+
+resources:
+  Resources:
+    TodosTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: TodosTable-${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
